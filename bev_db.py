@@ -22,7 +22,7 @@ def import_db(directory):
     con.commit()
     con.close()
 
-def get_db_conn(db_date):
+def get_db_conn(db_date="02042018"):
     directory = "Adresse_Relationale_Tabellen-Stichtagsdaten_%s" % db_date
     db_filename = "%s.sqlite" % directory
     if not os.path.exists(db_filename):
@@ -66,3 +66,10 @@ def get_district_bounds(gkz, db_con):
 
 def get_street_bounds(skz, db_con):
     return _get_bounds(db_con, "SELECT RW, HW, EPSG FROM ADRESSE WHERE SKZ == ?;", [str(skz),])
+
+def execute(sql, db_con=None):
+    if db_con is None:
+        db_con = get_db_conn()
+    cur = db_con.cursor()
+    for row in cur.execute(sql):
+        print(row)
