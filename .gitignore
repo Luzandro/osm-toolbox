@@ -102,3 +102,11 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# custom
+*.sqlite
+*.csv
+*.zip
+Adresse_relationale_Tabellen-Stichtagsdaten*/
+results/
+convert-addresses.py
