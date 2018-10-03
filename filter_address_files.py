@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 import xml.etree.cElementTree as ET
 from collections import defaultdict
+from math import cos, asin, sqrt
 import overpy
-import projection
 import sys
 
 # TODO: addr:units
@@ -81,14 +81,17 @@ def filter_address_file(filename):
                     # ignore existing addresses with different city
                     continue
                 p2 = (float(adr["lat"]), float(adr["lon"]))
-                if projection.get_distance(p1, p2) < 150:
+                if get_distance(p1, p2) < 150:
                     root.remove(node)
                     break
     tree.write('%s_filtered.osm' % filename[:-4])
 
 ''' strips whitespace/dash, ß->ss, ignore case '''
 def normalize_streetname(street):
-    return street.replace("ß", "ss").replace(" ", "").replace("-", "").lower()
+    s = street.replace("ß", "ss").replace(" ", "").replace("-", "").lower()
+    if s.endswith("str.") or s.endswith("g."):
+        s = s[:-1] + "asse"
+    return s
 
 def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_streetnames = True):
     if normalize_streetnames:
@@ -110,6 +113,13 @@ def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_street
         alt_names[name].add(official_name)
         alt_names[official_name].add(name)
     return alt_names
+
+def get_distance(point1, point2):
+    lat1, lon1 = point1
+    lat2, lon2 = point2
+    p = 0.017453292519943295     #Pi/180
+    a = 0.5 - cos((lat2 - lat1) * p)/2 + cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2
+    return 12742 * asin(sqrt(a)) * 1000 #2*R*asin...
 
 if __name__ == '__main__':
     for filename in sys.argv[1:]:
