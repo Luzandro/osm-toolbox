@@ -84,13 +84,15 @@ def filter_address_file(filename):
                 if get_distance(p1, p2) < 150:
                     root.remove(node)
                     break
-    tree.write('%s_filtered.osm' % filename[:-4])
+    if not root.find('node') is None:
+        tree.write('%s_filtered.osm' % filename[:-4])
 
 ''' strips whitespace/dash, ß->ss, ignore case '''
 def normalize_streetname(street):
     s = street.replace("ß", "ss").replace(" ", "").replace("-", "").lower()
     if s.endswith("str.") or s.endswith("g."):
         s = s[:-1] + "asse"
+    s = s.replace("dr.", "doktor")
     return s
 
 def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_streetnames = True):
