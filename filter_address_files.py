@@ -5,6 +5,7 @@ from collections import defaultdict
 from math import cos, asin, sqrt
 import overpy
 import sys
+from glob import glob
 
 # TODO: addr:units
 
@@ -20,7 +21,7 @@ def get_existing_addresses(minlat, minlon, maxlat, maxlon):
         polygon.lon = polygon.center_lon
     address_points.extend(result.nodes)
 
-    streets = {}
+    addresses = defaultdict(lambda: defaultdict(list))
     for addr in address_points:
         if "addr:street" in addr.tags:
             street = addr.tags["addr:street"]
@@ -36,24 +37,19 @@ def get_existing_addresses(minlat, minlon, maxlat, maxlon):
             address["city"] = addr.tags["addr:city"]
         if "addr:unit" in addr.tags:
             address["unit"] = addr.tags["addr:unit"]
-        if street in streets:
-            if housenumber in streets[street]:
-                streets[street][housenumber].append(address)
-            else:
-                streets[street][housenumber] = [address]
-        else:
-            streets[street] = {housenumber: [address]}
-    return streets
+        addresses[street][housenumber].append(address)
+    return addresses
 
 def filter_address_file(filename):
     tree = ET.parse(filename)
     root = tree.getroot()
     bounds = root.find("bounds")
+    bb_tolerance = 0.001
     streets = get_existing_addresses(
-        bounds.get("minlat"),
-        bounds.get("minlon"),
-        bounds.get("maxlat"),
-        bounds.get("maxlon"))
+        float(bounds.get("minlat"))-bb_tolerance,
+        float(bounds.get("minlon"))-bb_tolerance,
+        float(bounds.get("maxlat"))+bb_tolerance,
+        float(bounds.get("maxlon"))+bb_tolerance)
     alt_names = get_alternative_streetnames(
         bounds.get("minlat"),
         bounds.get("minlon"),
@@ -81,7 +77,8 @@ def filter_address_file(filename):
                     # ignore existing addresses with different city
                     continue
                 p2 = (float(adr["lat"]), float(adr["lon"]))
-                if get_distance(p1, p2) < 150:
+                dist = get_distance(p1, p2)
+                if dist < 150:
                     root.remove(node)
                     break
     if not root.find('node') is None:
@@ -124,7 +121,12 @@ def get_distance(point1, point2):
     return 12742 * asin(sqrt(a)) * 1000 #2*R*asin...
 
 if __name__ == '__main__':
-    for filename in sys.argv[1:]:
-        if not "_filtered.osm" in filename:
-            print(filename)
-            filter_address_file(filename)
+    if len(sys.argv) > 1:
+        if len(sys.argv) == 2:
+            filenames = glob(sys.argv[1])
+        else:
+            filenames = sys.argv[1:]
+        for filename in filenames:
+            if not "_filtered.osm" in filename:
+                print(filename)
+                filter_address_file(filename)

@@ -3,6 +3,8 @@ OLD='2017-10-01'
 NEW='2018-04-02'
 DIFF="DIFF_${OLD}_${NEW}"
 
+cd results/
+
 find $NEW -name "*.osm" -print0 | while read -d $'\0' file
 do
     mkdir -p $(dirname ${file/$NEW/$DIFF});
