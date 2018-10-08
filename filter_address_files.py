@@ -6,6 +6,7 @@ from math import cos, asin, sqrt
 import overpy
 import sys
 from glob import glob
+import os
 
 # TODO: addr:units
 
@@ -40,25 +41,9 @@ def get_existing_addresses(minlat, minlon, maxlat, maxlon):
         addresses[street][housenumber].append(address)
     return addresses
 
-def filter_address_file(filename):
+def filter_address_file(filename, addresses):
     tree = ET.parse(filename)
     root = tree.getroot()
-    bounds = root.find("bounds")
-    bb_tolerance = 0.001
-    streets = get_existing_addresses(
-        float(bounds.get("minlat"))-bb_tolerance,
-        float(bounds.get("minlon"))-bb_tolerance,
-        float(bounds.get("maxlat"))+bb_tolerance,
-        float(bounds.get("maxlon"))+bb_tolerance)
-    alt_names = get_alternative_streetnames(
-        bounds.get("minlat"),
-        bounds.get("minlon"),
-        bounds.get("maxlat"),
-        bounds.get("maxlon"))
-
-    for street in list(streets.keys()):
-        for alternative in alt_names[street]:
-            streets[alternative] = streets[street]
 
     for node in root.findall('node'):
         tags = {}
@@ -70,9 +55,9 @@ def filter_address_file(filename):
             street = tags["addr:place"]
         street = normalize_streetname(street)
         housenumber = tags["addr:housenumber"].lower()
-        if street in streets and housenumber in streets[street]:
+        if street in addresses and housenumber in addresses[street]:
             p1 = (float(node.get("lat")), float(node.get("lon")))
-            for adr in streets[street][housenumber]:
+            for adr in addresses[street][housenumber]:
                 if "city" in adr and adr["city"] != tags["addr:city"]:
                     # ignore existing addresses with different city
                     continue
@@ -81,8 +66,11 @@ def filter_address_file(filename):
                 if dist < 150:
                     root.remove(node)
                     break
+    filtered_filename = '%s_filtered.osm' % filename[:-4]
     if not root.find('node') is None:
-        tree.write('%s_filtered.osm' % filename[:-4])
+        tree.write(filtered_filename)
+    elif os.path.exists(filtered_filename):
+        os.remove(filtered_filename)
 
 ''' strips whitespace/dash, ß->ss, ignore case '''
 def normalize_streetname(street):
@@ -90,6 +78,7 @@ def normalize_streetname(street):
     if s.endswith("str.") or s.endswith("g."):
         s = s[:-1] + "asse"
     s = s.replace("dr.", "doktor")
+    s = s.replace("wr.", "wiener")
     return s
 
 def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_streetnames = True):
@@ -120,13 +109,50 @@ def get_distance(point1, point2):
     a = 0.5 - cos((lat2 - lat1) * p)/2 + cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2
     return 12742 * asin(sqrt(a)) * 1000 #2*R*asin...
 
+def get_boundaries(filenames):
+    minlat, minlon, maxlat, maxlon = None, None, None, None
+    bb_tolerance = 0.001
+    for filename in filenames:
+        tree = ET.parse(filename)
+        root = tree.getroot()
+        bounds = root.find("bounds")
+        file_minlat = float(bounds.get("minlat"))
+        file_minlon = float(bounds.get("minlon"))
+        file_maxlat = float(bounds.get("maxlat"))
+        file_maxlon = float(bounds.get("maxlon"))
+        if minlat is None:
+            minlat = file_minlat
+            minlon = file_minlon
+            maxlat = file_maxlat
+            maxlon = file_maxlon
+        else:
+            if file_minlat < minlat:
+                minlat = file_minlat
+            if file_minlon < minlon:
+                minlon = file_minlon
+            if file_maxlat > maxlat:
+                maxlat = file_maxlat
+            if file_maxlon > maxlon:
+                maxlon = file_maxlon
+    bb_size = get_distance((minlat, minlon), (maxlat, maxlon))
+    if bb_size > 20000:
+        sys.exit("Boundingbox too large (%s)" % bb_size)
+    else:
+        return (minlat-bb_tolerance, minlon-bb_tolerance, maxlat+bb_tolerance, maxlon+bb_tolerance)
+
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         if len(sys.argv) == 2:
             filenames = glob(sys.argv[1])
         else:
             filenames = sys.argv[1:]
+        bounds = get_boundaries(filenames)
+        addresses = get_existing_addresses(*bounds)
+        alt_names = get_alternative_streetnames(*bounds)
+        for street in list(addresses.keys()):
+            for alternative in alt_names[street]:
+                addresses[alternative] = addresses[street]
         for filename in filenames:
             if not "_filtered.osm" in filename:
                 print(filename)
-                filter_address_file(filename)
+                filter_address_file(filename, addresses)
