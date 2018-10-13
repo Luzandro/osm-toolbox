@@ -77,8 +77,14 @@ def normalize_streetname(street):
     s = street.replace("ß", "ss").replace(" ", "").replace("-", "").lower()
     if s.endswith("str.") or s.endswith("g."):
         s = s[:-1] + "asse"
-    s = s.replace("dr.", "doktor")
-    s = s.replace("wr.", "wiener")
+    abbreviations = {"dr.": "doktor",
+        "wr.": "wiener",
+        "st.": "sankt",
+        "v.": "von",
+        "bgm.": "bürgermeister",
+        "th.körner": "theodorkörner"}
+    for key, value in abbreviations.items():
+        s = s.replace(key, value)
     return s
 
 def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_streetnames = True):
