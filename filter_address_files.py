@@ -38,6 +38,8 @@ def get_existing_addresses(minlat, minlon, maxlat, maxlon):
             address["city"] = addr.tags["addr:city"]
         if "addr:unit" in addr.tags:
             address["unit"] = addr.tags["addr:unit"]
+        elif "/" in housenumber:
+            housenumber, address["unit"] = housenumber.split("/", 1)
         addresses[street][housenumber].append(address)
     return addresses
 
