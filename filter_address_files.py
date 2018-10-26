@@ -7,12 +7,14 @@ import overpy
 import sys
 from glob import glob
 import os
+from abbreviations import ABBREVIATIONS
 
 # TODO: addr:units
 
 def get_existing_addresses(minlat, minlon, maxlat, maxlon):
     api = overpy.Overpass()
-    result = api.query('nwr["addr:housenumber"](%s,%s,%s,%s);out center;' % (minlat, minlon, maxlat, maxlon))
+    query = 'nwr["addr:housenumber"](%s,%s,%s,%s);out center;' % (minlat, minlon, maxlat, maxlon)
+    result = api.query(query)
 
     address_points = []
     address_points.extend(result.ways)
@@ -60,12 +62,13 @@ def filter_address_file(filename, addresses):
         if street in addresses and housenumber in addresses[street]:
             p1 = (float(node.get("lat")), float(node.get("lon")))
             for adr in addresses[street][housenumber]:
-                if "city" in adr and adr["city"] != tags["addr:city"]:
-                    # ignore existing addresses with different city
-                    continue
                 p2 = (float(adr["lat"]), float(adr["lon"]))
                 dist = get_distance(p1, p2)
+                #print(street, housenumber, dist)
                 if dist < 150:
+                    if "city" in adr and adr["city"] != tags["addr:city"] and dist > 50:
+                        # if city is set and differs use higher threshold
+                        continue
                     root.remove(node)
                     break
     filtered_filename = '%s_filtered.osm' % filename[:-4]
@@ -75,18 +78,24 @@ def filter_address_file(filename, addresses):
         os.remove(filtered_filename)
 
 ''' strips whitespace/dash, ß->ss, ignore case '''
-def normalize_streetname(street):
+def normalize_streetname(street, expand_abbreviations=True):
     s = street.replace("ß", "ss").replace(" ", "").replace("-", "").lower()
-    if s.endswith("str.") or s.endswith("g."):
-        s = s[:-1] + "asse"
-    abbreviations = {"dr.": "doktor",
-        "wr.": "wiener",
-        "st.": "sankt",
-        "v.": "von",
-        "bgm.": "bürgermeister",
-        "th.körner": "theodorkörner"}
-    for key, value in abbreviations.items():
-        s = s.replace(key, value)
+    if expand_abbreviations:
+        if s.endswith("str.") or s.endswith("g."):
+            s = s[:-1] + "asse"
+        if not hasattr(normalize_streetname, "abbreviations"):
+            # preprocess abbr. and init static function variable
+            normalize_streetname.abbreviations = {}
+            for key, value in ABBREVIATIONS.items():
+                new_key = normalize_streetname(key, False)
+                new_value = normalize_streetname(value, False)
+                if new_key in new_value:
+                    normalize_streetname.abbreviations[new_value] = new_key
+                else:
+                    normalize_streetname.abbreviations[new_key] = new_value
+            print(normalize_streetname.abbreviations)
+        for key, value in normalize_streetname.abbreviations.items():
+            s = s.replace(key, value)
     return s
 
 def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_streetnames = True):
@@ -159,7 +168,8 @@ if __name__ == '__main__':
         alt_names = get_alternative_streetnames(*bounds)
         for street in list(addresses.keys()):
             for alternative in alt_names[street]:
-                addresses[alternative] = addresses[street]
+                for housenumber in alternative:
+                    addresses[alternative][housenumber].append(addresses[street][housenumber])
         for filename in filenames:
             if not "_filtered.osm" in filename:
                 print(filename)
