@@ -7,7 +7,7 @@ import overpy
 import sys
 from glob import glob
 import os
-from abbreviations import ABBREVIATIONS
+from abbreviations import ABBREVIATIONS, NAMES
 
 # TODO: addr:units
 
@@ -89,11 +89,18 @@ def normalize_streetname(street, expand_abbreviations=True):
             for key, value in ABBREVIATIONS.items():
                 new_key = normalize_streetname(key, False)
                 new_value = normalize_streetname(value, False)
-                if new_key in new_value:
+                # use shortened version for comparison as this is unambiguous
+                if len(new_key) < len(new_value):
                     normalize_streetname.abbreviations[new_value] = new_key
                 else:
                     normalize_streetname.abbreviations[new_key] = new_value
-            print(normalize_streetname.abbreviations)
+            for name in NAMES:
+                name = name.lower()
+                if name.startswith("th"):
+                    normalize_streetname.abbreviations[name] = 'th.'
+                else:
+                    normalize_streetname.abbreviations[name] = name[0] + '.'
+            #print(normalize_streetname.abbreviations)
         for key, value in normalize_streetname.abbreviations.items():
             s = s.replace(key, value)
     return s
@@ -171,6 +178,6 @@ if __name__ == '__main__':
                 for housenumber in alternative:
                     addresses[alternative][housenumber].append(addresses[street][housenumber])
         for filename in filenames:
-            if not "_filtered.osm" in filename:
+            if not "_filtered.osm" in filename or filename.startswith("NOTES_"):
                 print(filename)
                 filter_address_file(filename, addresses)
