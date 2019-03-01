@@ -7,12 +7,14 @@ import overpy
 import sys
 from glob import glob
 import os
+import argparse
 from abbreviations import ABBREVIATIONS, NAMES
 
+LOCAL_OVERPASS_URL = "http://localhost/cgi-bin/overpass-api/interpreter"
 # TODO: addr:units
 
 def get_existing_addresses(minlat, minlon, maxlat, maxlon):
-    api = overpy.Overpass()
+    api = overpy.Overpass(url=OVERPASS_URL)
     query = 'nwr["addr:housenumber"](%s,%s,%s,%s);out center;' % (minlat, minlon, maxlat, maxlon)
     result = api.query(query)
 
@@ -45,6 +47,19 @@ def get_existing_addresses(minlat, minlon, maxlat, maxlon):
         addresses[street][housenumber].append(address)
     return addresses
 
+def filter_address_files(list_of_filenames):
+    bounds = get_boundaries(list_of_filenames)
+    addresses = get_existing_addresses(*bounds)
+    alt_names = get_alternative_streetnames(*bounds)
+    for street in list(addresses.keys()):
+        for alternative in alt_names[street]:
+            for housenumber in alternative:
+                addresses[alternative][housenumber].append(addresses[street][housenumber])
+    for filename in list_of_filenames:
+        if not "_filtered.osm" in filename or filename.startswith("NOTES_"):
+            print(filename)
+            filter_address_file(filename, addresses)
+
 def filter_address_file(filename, addresses):
     tree = ET.parse(filename)
     root = tree.getroot()
@@ -71,11 +86,18 @@ def filter_address_file(filename, addresses):
                         continue
                     root.remove(node)
                     break
-    filtered_filename = '%s_filtered.osm' % filename[:-4]
+    directory, filename = os.path.split(os.path.abspath(filename))
+    filtered_directory = "%s_filtered" % directory
+    if not os.path.exists(filtered_directory):
+        os.mkdir(filtered_directory)
+    filtered_filename = "%s_filtered.osm" % filename[:-4]
+    filtered_path = os.path.join(filtered_directory, filtered_filename)
+    #filtered_filename = '%s_filtered.osm' % filename[:-4]
     if not root.find('node') is None:
-        tree.write(filtered_filename)
-    elif os.path.exists(filtered_filename):
-        os.remove(filtered_filename)
+        tree.write(filtered_path)
+    elif os.path.exists(filtered_path):
+        os.remove(filtered_path)
+        # TODO: directory empty?
 
 ''' strips whitespace/dash, ß->ss, ignore case '''
 def normalize_streetname(street, expand_abbreviations=True):
@@ -111,8 +133,8 @@ def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_street
     else:
         normalize = lambda x : x
     alt_names = defaultdict(set)
-    api = overpy.Overpass()
-    result = api.query('way[highway][alt_name](%s,%s,%s,%s);out;' % (minlat, minlon, maxlat, maxlon))
+    api = overpy.Overpass(url=OVERPASS_URL)
+    result = api.query('way[highway][alt_name][name](%s,%s,%s,%s);out;' % (minlat, minlon, maxlat, maxlon))
     for way in result.ways:
         name = normalize(way.tags["name"])
         alt_name = normalize(way.tags["alt_name"])
@@ -159,25 +181,22 @@ def get_boundaries(filenames):
             if file_maxlon > maxlon:
                 maxlon = file_maxlon
     bb_size = get_distance((minlat, minlon), (maxlat, maxlon))
-    if bb_size > 20000:
+    if bb_size > 27000 and not ARGS.local:
         sys.exit("Boundingbox too large (%s)" % bb_size)
     else:
         return (minlat-bb_tolerance, minlon-bb_tolerance, maxlat+bb_tolerance, maxlon+bb_tolerance)
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        if len(sys.argv) == 2:
-            filenames = glob(sys.argv[1])
-        else:
-            filenames = sys.argv[1:]
-        bounds = get_boundaries(filenames)
-        addresses = get_existing_addresses(*bounds)
-        alt_names = get_alternative_streetnames(*bounds)
-        for street in list(addresses.keys()):
-            for alternative in alt_names[street]:
-                for housenumber in alternative:
-                    addresses[alternative][housenumber].append(addresses[street][housenumber])
-        for filename in filenames:
-            if not "_filtered.osm" in filename or filename.startswith("NOTES_"):
-                print(filename)
-                filter_address_file(filename, addresses)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("directory", nargs=1, help="input directory")
+    parser.add_argument("--local", action="store_true", help="use local overpass server (URL: %s)" % LOCAL_OVERPASS_URL, dest="local")
+    ARGS = parser.parse_args()
+    if ARGS.local:
+        OVERPASS_URL = LOCAL_OVERPASS_URL
+    else:
+        OVERPASS_URL = None
+    if os.path.isdir(ARGS.directory[0]):
+        for root, dirs, files in os.walk(ARGS.directory[0]):
+            if len(dirs) == 0:
+                filter_address_files([os.path.join(root, f) for f in files])
+        
