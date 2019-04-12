@@ -4,7 +4,7 @@ import bev_db
 import overpy
 import csv
 import re
-from filter_address_files import normalize_streetname
+from streetnames import normalize_streetname
 
 def compare_street_names(db_date_old, db_date_new, ignore_minor_changes=False):
     csv_header = ['Gemeinde', db_date_old, db_date_new, 'Way ID', 'aktuell', 'OSM-Link']
