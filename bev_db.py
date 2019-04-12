@@ -73,3 +73,6 @@ def execute(sql, db_con=None):
     cur = db_con.cursor()
     for row in cur.execute(sql):
         print(row)
+
+def print_district_partitions(gemeindename):
+    execute("SELECT GEMEINDE.GKZ, OKZ, ORTSNAME FROM GEMEINDE JOIN ORTSCHAFT ON GEMEINDE.GKZ = ORTSCHAFT.GKZ WHERE GEMEINDENAME='%s'" % gemeindename)
