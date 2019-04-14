@@ -7,7 +7,7 @@ from glob import glob
 import os
 import argparse
 from osm_files import get_boundaries
-from projection import get_distance
+from haversine import get_distance
 import overpass
 from streetnames import normalize_streetname
 
