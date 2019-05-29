@@ -20,8 +20,9 @@ def filter_address_files(list_of_filenames):
     alt_names = overpass.get_alternative_streetnames(*bounds)
     for street in list(addresses.keys()):
         for alternative in alt_names[street]:
-            for housenumber in alternative:
-                addresses[alternative][housenumber].append(addresses[street][housenumber])
+            for housenumber in addresses[alternative]:
+                addresses[street][housenumber].extend(addresses[alternative][housenumber])
+            addresses[alternative] = addresses[street]
     overall_count = 0
     filtered_count = 0
     for filename in list_of_filenames:

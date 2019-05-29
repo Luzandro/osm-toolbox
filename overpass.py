@@ -64,7 +64,7 @@ def get_existing_addresses(minlat, minlon, maxlat, maxlon):
 
     return addresses
 
-def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_streetnames = True):
+def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_streetnames = True, add_inverse = False):
     if normalize_streetnames:
         normalize = normalize_streetname
     else:
@@ -77,7 +77,8 @@ def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_street
             name = normalize(way.tags["name"])
             alt_name = normalize(way.tags["alt_name"])
             alt_names[name].add(alt_name)
-            alt_names[alt_name].add(name)
+            if add_inverse:
+                alt_names[alt_name].add(name)
         except ValueError:
             error_file = open("invalid_characters.txt", "a+")
             error_file.write("%s %s (alt_name)\n\n" % (way.tags["alt_name"], way.tags["name"]))
@@ -88,7 +89,8 @@ def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_street
             name = normalize(way.tags["name"])
             official_name = normalize(way.tags["official_name"])
             alt_names[name].add(official_name)
-            alt_names[official_name].add(name)
+            if add_inverse:
+                alt_names[official_name].add(name)
         except ValueError:
             error_file = open("invalid_characters.txt", "a+")
             error_file.write("%s %s (official_name)\n\n" % (way.tags["official_name"], way.tags["name"]))
