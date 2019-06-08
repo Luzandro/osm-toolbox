@@ -14,9 +14,8 @@ def use_local_overpass(local):
     if local:
         set_overpass_url(LOCAL_OVERPASS_URL)
 
-def get_existing_addresses(minlat, minlon, maxlat, maxlon):
+def _get_existing_addresses(query):
     api = overpy.Overpass(url=OVERPASS_URL)
-    query = 'nwr["addr:housenumber"](%s,%s,%s,%s);out center;' % (minlat, minlon, maxlat, maxlon)
     result = api.query(query)
 
     address_points = []
@@ -64,6 +63,14 @@ def get_existing_addresses(minlat, minlon, maxlat, maxlon):
 
     return addresses
 
+def get_existing_addresses_around(lat, lon, distance=3.0):
+    query = 'nwr["addr:housenumber"](around: %s,%s,%s);out center;' % (distance, lat, lon)
+    return _get_existing_addresses(query)
+
+def get_existing_addresses(minlat, minlon, maxlat, maxlon):
+    query = 'nwr["addr:housenumber"](%s,%s,%s,%s);out center;' % (minlat, minlon, maxlat, maxlon)
+    return _get_existing_addresses(query)
+
 def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_streetnames = True, add_inverse = False):
     if normalize_streetnames:
         normalize = normalize_streetname
@@ -96,3 +103,47 @@ def get_alternative_streetnames(minlat, minlon, maxlat, maxlon, normalize_street
             error_file.write("%s %s (official_name)\n\n" % (way.tags["official_name"], way.tags["name"]))
             error_file.close()
     return alt_names
+
+def get_nearby_streets(lat, lon, distance=100):
+    api = overpy.Overpass(url=OVERPASS_URL)
+    result = api.query("way[highway~'residential|unclassified|primary|secondary|tertiary|service'](around: %s,%s,%s);out;" % (distance, lat, lon))
+    return result.ways
+
+def get_housenumbers_without_streetname(minlat, minlon, maxlat, maxlon):
+    api = overpy.Overpass(url=OVERPASS_URL)
+    result = api.query("nwr['addr:housenumber'][!'addr:street'][!'addr:place'](%s,%s,%s,%s);out;" % (minlat, minlon, maxlat, maxlon))
+    housenumbers = []
+    housenumbers.extend(result.nodes)
+    housenumbers.extend(result.ways)
+    housenumbers.extend(result.relations)
+    return housenumbers
+
+def place_exists(minlat, minlon, maxlat, maxlon, name):
+    api = overpy.Overpass(url=OVERPASS_URL)
+    bounds = "%s,%s,%s,%s" % (minlat, minlon, maxlat, maxlon)
+    result = api.query("(nwr[place][name='%s'](%s);nwr[place]['name:de'='%s'](%s);nwr[place]['short_name'='%s'](%s);nwr[place][alt_name='%s'](%s);nwr[place][official_name='%s'](%s););out;" % (name, bounds, name, bounds, name, bounds, name, bounds, name, bounds))
+    return (len(result.nodes) + len(result.ways) + len(result.relations) > 0)
+
+def get_streets_by_name(minlat, minlon, maxlat, maxlon, name):
+    api = overpy.Overpass(url=OVERPASS_URL)
+    bounds = "%s,%s,%s,%s" % (minlat, minlon, maxlat, maxlon)
+    query = """way[highway](%s);(._;>;);out;""" % bounds
+    #print(query)
+    result = api.query(query)
+    ways = []
+    nodes = {}
+    for way in result.ways:
+        try:
+            if "name" in way.tags and normalize_streetname(way.tags["name"]) == normalize_streetname(name):
+                ways.append(way)
+            elif "alt_name" in way.tags and normalize_streetname(way.tags["alt_name"]) == normalize_streetname(name):
+                ways.append(way)
+            elif "official_name" in way.tags and normalize_streetname(way.tags["official_name"]) == normalize_streetname(name):
+                ways.append(way)
+            elif "short_name" in way.tags and normalize_streetname(way.tags["short_name"]) == normalize_streetname(name):
+                ways.append(way)
+        except ValueError:
+            pass
+    for node in result.nodes:
+        nodes[node.id] = node
+    return (ways, nodes)
