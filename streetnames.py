@@ -14,6 +14,7 @@ ABBREVIATIONS = {
     "von": "v.",
     "van": "v.",
     "Bürgermeister": "Bgm.",
+    "Nationalrat": "NR.",
     "Dechant": "D.",
     "Ingenieur": "Ing.",
     "Schwester": "Sr.",
@@ -22,9 +23,12 @@ ABBREVIATIONS = {
     "Beethoven": "Ludwig van Beethoven",
     "Schedyfka": "Wilhelm Schedyfka",
     "Rückert": "Friedrich Rückert",
+    "Rosegger": "Peter Rosegger",
+    "Nestroy": "Johann Nestroy",
+    "Billroth": "Theodor Billroth"
 }
 
-NAMES = ('Adam', 'Adolf', 'Alexander', 'Alfred', 'Alois', 'Alphons', 'Amadeus', 'Ambros', 'Anton', 'Arthur',
+NAMES = ('Adam', 'Adolf', 'Alexander', 'Alfons', 'Alfred', 'Alois', 'Alphons', 'Amadeus', 'Ambros', 'Anton', 'Arthur',
     'Balthasar', 'Bernhard', 'Bertha',
     'Christoph', 'Clemens', 'Conrad',
     'Engelbert',
@@ -35,7 +39,7 @@ NAMES = ('Adam', 'Adolf', 'Alexander', 'Alfred', 'Alois', 'Alphons', 'Amadeus', 
     'Jakob', 'Joh.', 'Johann', 'Josef', 'Joseph', 
     'Karl', 
     'Leop.', 'Leopold', 'Ludwig',
-    'Maria', 'Mathias', 'Max', 'Michael', 'Moritz',
+    'Maria', 'Mathias', 'Max', 'Michael', 'Moritz', 'Mich.', 'Michel'
     'Oskar', 'Ottokar', 'Otto',
     'Richard', 'Robert', 'Rudolf', 
     'Sebastian', 
@@ -46,7 +50,7 @@ NAMES = ('Adam', 'Adolf', 'Alexander', 'Alfred', 'Alois', 'Alphons', 'Amadeus', 
 
 ''' strips whitespace/dash, ß->ss, ignore case '''
 def normalize_streetname(street, expand_abbreviations=True):
-    valid_chars = string.ascii_letters + string.digits + "üäö.,()/;"
+    valid_chars = string.ascii_letters + string.digits + "üäö.,()/;+"
     translation_table = str.maketrans("áčéěëèíóőřšúž", "aceeeeioorsuz")
     s = street.replace("ß", "ss").replace(" ", "").replace("-", "").replace("'", "").lower()
     s = s.replace("\xa0", "") # non breaking space
