@@ -18,13 +18,12 @@ FILTERED_SUFFIX = "_filtered"
 def filter_address_files(list_of_filenames):
     bounds = get_boundaries(list_of_filenames)
     addresses = overpass.get_existing_addresses(*bounds)
-    # NOTE: ignore alt_names atm until the buggy import is cleaned up
-    #alt_names = overpass.get_alternative_streetnames(*bounds)
-    #for street in list(addresses.keys()):
-        #for alternative in alt_names[street]:
-            #for housenumber in addresses[alternative]:
-                #addresses[street][housenumber].extend(addresses[alternative][housenumber])
-            #addresses[alternative] = addresses[street]
+    alt_names = overpass.get_alternative_streetnames(*bounds)
+    for street in list(addresses.keys()):
+        for alternative in alt_names[street]:
+            for housenumber in addresses[alternative]:
+                addresses[street][housenumber].extend(addresses[alternative][housenumber])
+            addresses[alternative] = addresses[street]
     overall_count = 0
     filtered_count = 0
     for filename in list_of_filenames:
@@ -39,7 +38,6 @@ def get_village_from_filename(filename):
     m = re.search("\d+_([^_]+)_", filename)
     return m.group(1)
 
-
 def filter_address_file(filename, addresses):
     tree = ET.parse(filename)
     root = tree.getroot()
@@ -49,6 +47,7 @@ def filter_address_file(filename, addresses):
     bounds = get_boundaries([filename])
     has_local_addresses = None
     streets = None
+    place_exists = None
 
     for node in root.findall('node'):
         overall_count += 1
@@ -91,20 +90,28 @@ def filter_address_file(filename, addresses):
                         break
                     else:
                         fixme = "ähnliche Adresse in %dm Entfernung" % dist
-                        add_fixme(node, BevFixme.SIMILAR_ADR, fixme)
+                        has_fixme = add_fixme(node, BevFixme.SIMILAR_ADR, fixme)
         else:
-            if has_local_addresses is None:
+            if SANITY_CHECKS and has_local_addresses is None:
                 has_local_addresses = len(overpass.get_existing_addresses(*bounds)) > 0
-        if not (filtered or has_fixme):
+        if SANITY_CHECKS and not (filtered or has_fixme):
             if has_local_addresses and len(overpass.get_existing_addresses_around(node.get("lat"), node.get("lon"))) > 0:
-                add_fixme(node, BevFixme.CLOSE_ADR)
+                has_fixme = add_fixme(node, BevFixme.CLOSE_ADR)
                 continue
             if not "addr:place" in tags:
                 # check streetname / distance
                 if streets is None:
                     streets = overpass.get_streets_by_name(*bounds, street)
                 if len(streets[0]) == 0:
-                    add_fixme(node, BevFixme.STREET_NOT_FOUND)
+                    if place_exists is None:
+                        place_exists = overpass.place_exists(*bounds, street)
+                    if place_exists:
+                        has_fixme = add_fixme(node, BevFixme.ADDR_PLACE_NEEDED)
+                    else:
+                        if has_local_addresses or overpass.streets_exist(*bounds):
+                            has_fixme = add_fixme(node, BevFixme.STREET_NOT_FOUND)
+                        else:
+                            has_fixme = add_fixme(node, BevFixme.NO_STREET_FOUND)
                     continue
                 else:
                     # get nearest way
@@ -137,7 +144,10 @@ def filter_address_file(filename, addresses):
                         if min_dist is None or dist < min_dist:
                             min_dist = dist
                     if min_dist > 150:
-                        add_fixme(node, BevFixme.DISTANT_STREET, "Straße weit entfernt (%dm)" % min_dist)
+                        has_fixme = add_fixme(node, BevFixme.DISTANT_STREET, "Straße weit entfernt (%dm)" % min_dist)
+            #if not has_fixme:
+                #if not overpass.is_building_nearby(node.get("lat"), node.get("lon")):
+                    #has_fixme = add_fixme(node, BevFixme.NO_OSM_BUILDING)
     directory, filename = os.path.split(os.path.abspath(filename))
     filtered_directory = "%s%s" % (directory, FILTERED_SUFFIX)
     if not os.path.exists(filtered_directory):
@@ -153,14 +163,19 @@ def filter_address_file(filename, addresses):
 
 class BevFixme(enum.Enum):
     NO_BUILDING = "Adresse ohne Gebäude oder Ident-Adresse"
+    NO_OSM_BUILDING = "nicht innerhalb eines OSM-Gebäude"
     SIMILAR_ADR = "ähnliche Adresse in der Umgebung"
     CLOSE_ADR = "sehr nahe andere Adressen gefunden bzw. innerhalb eines Gebäudes/Bereichs mit anderer Adresse"
     NO_STREET_TAG = "Hausnummern ohne addr:street/addr:place in der Umgebung gefunden"
     PLACE_NOT_FOUND = "kein place namens '#NAME#' im Adressbereich gefunden"
     STREET_NOT_FOUND = "keine Straße namens '#NAME#' im Adressbereich gefunden"
+    NO_STREET_FOUND = "keine Straße im Adressbereich gefunden"
     DISTANT_STREET = "Straße weit entfernt"
+    ADDR_PLACE_NEEDED = "keine Straße aber ein Ort namens '#NAME#' im Adressbereich gefunden"
 
 def add_fixme(node, category, text=None):
+    if not SANITY_CHECKS:
+        return False
     tags = {}
     for tag in node.findall('tag'):
         tags[tag.get("k")] = tag.get("v")
@@ -172,18 +187,18 @@ def add_fixme(node, category, text=None):
         ET.SubElement(node, "tag", k="fixme", v="BEV-Daten überprüfen")
     if text is None:
         text = category.value
-        if category == BevFixme.PLACE_NOT_FOUND or category == BevFixme.STREET_NOT_FOUND:
+        if category == BevFixme.PLACE_NOT_FOUND or category == BevFixme.STREET_NOT_FOUND or category == BevFixme.ADDR_PLACE_NEEDED:
             text = text.replace("#NAME#", street)
     ET.SubElement(node, "tag", k="fixme:BEV:%s" % category.name, v=text)
-    #error_file = open("%s.txt" % category.name, "a+")
-    #error_file.write("%s %s %s: %s\n" % (tags["addr:city"], street, tags["addr:housenumber"], text))
-    #error_file.close()
+    return True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("directory", nargs=1, help="input directory")
     parser.add_argument("--local", action="store_true", help="use local overpass server (URL: %s)" % overpass.LOCAL_OVERPASS_URL, dest="local")
+    parser.add_argument("--sanity_checks", action="store_true", help="validate data using various sanity checks", dest="sanity_checks")
     ARGS = parser.parse_args()
+    SANITY_CHECKS = ARGS.sanity_checks
     overpass.use_local_overpass(ARGS.local)
     if os.path.isdir(ARGS.directory[0]):
         overall_count = 0
