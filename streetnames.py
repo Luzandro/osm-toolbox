@@ -13,6 +13,7 @@ ABBREVIATIONS = {
     "Sankt": "St.",
     "von": "v.",
     "van": "v.",
+    "Architekt": "Arch.",
     "Bürgermeister": "Bgm.",
     "Nationalrat": "NR.",
     "Dechant": "D.",
@@ -28,31 +29,33 @@ ABBREVIATIONS = {
     "Billroth": "Theodor Billroth"
 }
 
-NAMES = ('Adam', 'Adolf', 'Alexander', 'Alfons', 'Alfred', 'Alois', 'Alphons', 'Amadeus', 'Ambros', 'Anton', 'Arthur',
+NAMES = ('Adam', 'Adolf', 'Alexander', 'Alfons', 'Alfred', 'Alois', 'Alphons', 'Amadeus', 'Ambros', 'Ant.', 'Anton', 'Arthur', 'Aug.', 'August',
     'Balthasar', 'Bernhard', 'Bertha',
     'Christoph', 'Clemens', 'Conrad',
     'Engelbert',
-    'Felix', 'Ferd.', 'Ferdinand', 'Franz', 'Friedrich',
-    'Georg', 'Gottfr.', 'Gottfried', 'Gustav',
-    'Hans', 'Heinr.', 'Heinrich', 'Herbert', 'Hugo', 
+    'Felix', 'Ferd.', 'Ferdinand', 'Franz', 'Fr.', 'Friedr.', 'Friedrich',
+    'Georg', 'Gottfr.', 'Gottfried', 'Gottlieb', 'Gustav',
+    'Hans', 'Heinr.', 'Heinrich', 'Herbert', 'Hertha', 'Herta', 'Hugo', 
     'Isolde',
     'Jakob', 'Joh.', 'Johann', 'Josef', 'Joseph', 
     'Karl', 
     'Leop.', 'Leopold', 'Ludwig',
-    'Maria', 'Mathias', 'Max', 'Michael', 'Moritz', 'Mich.', 'Michel'
+    'Maria', 'Mathias', 'Max', 'Michael', 'Moritz', 'Mich.', 'Michel',
+    'Nikolaus',
     'Oskar', 'Ottokar', 'Otto',
     'Richard', 'Robert', 'Rudolf', 
     'Sebastian', 
     'Theodor',
+    'Viktor',
     'Walter', 'Wenzel', 'Wilhelm', 'Wolfgang', 
     'Xaver',
     'Zach.', 'Zacharias')
 
 ''' strips whitespace/dash, ß->ss, ignore case '''
 def normalize_streetname(street, expand_abbreviations=True):
-    valid_chars = string.ascii_letters + string.digits + "üäö.,()/;+"
+    valid_chars = string.ascii_letters + string.digits + "üäö.,()/;+ -'"
     translation_table = str.maketrans("áčéěëèíóőřšúž", "aceeeeioorsuz")
-    s = street.replace("ß", "ss").replace(" ", "").replace("-", "").replace("'", "").lower()
+    s = street.replace("ß", "ss").lower()
     s = s.replace("\xa0", "") # non breaking space
     s = s.replace("&", "+")
     s = s.translate(translation_table)
@@ -81,4 +84,5 @@ def normalize_streetname(street, expand_abbreviations=True):
             s = s.replace(key, value)
     if not all([char in valid_chars for char in s]):
         raise ValueError("non ascii character found in street name: ", s)
+    s = s.replace(" ", "").replace("-", "").replace("'", "").lower()
     return s
