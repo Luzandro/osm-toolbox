@@ -63,10 +63,8 @@ def _get_existing_addresses(query):
 
     return addresses
 
-#def get_existing_addresses_around(lat, lon, distance=3.0):
 def get_existing_addresses_around(lat, lon, distance=6.0):
     query = 'nwr["addr:housenumber"](around: %s,%s,%s);out center;' % (distance, lat, lon)
-    #print(query)
     return _get_existing_addresses(query)
 
 def is_building_nearby(lat, lon, distance=3.0):
@@ -129,7 +127,6 @@ def get_housenumbers_without_streetname(minlat, minlon, maxlat, maxlon):
 def admin_boundary_exists(minlat, minlon, maxlat, maxlon, name):
     api = overpy.Overpass(url=OVERPASS_URL)
     bounds = "%s,%s,%s,%s" % (minlat, minlon, maxlat, maxlon)
-    #result = api.query("(nwr[place][name='%s'](%s);nwr[place]['name:de'='%s'](%s);nwr[place]['short_name'='%s'](%s);nwr[place][alt_name='%s'](%s);nwr[place][official_name='%s'](%s););out;" % (name, bounds, name, bounds, name, bounds, name, bounds, name, bounds))
     query = """relation[boundary=administrative](%s);out;""" % bounds
     result = api.query(query)
     for boundary in result.relations:
@@ -143,7 +140,7 @@ def admin_boundary_exists(minlat, minlon, maxlat, maxlon, name):
                     if boundary_name == name:
                         return True
             except ValueError:
-                # ignore places with unsupported characters
+                # ignore boundaries with unsupported characters
                 pass
     return False
     
@@ -151,7 +148,6 @@ def admin_boundary_exists(minlat, minlon, maxlat, maxlon, name):
 def place_exists(minlat, minlon, maxlat, maxlon, name, tolerance=0, ignore_postfix=False):
     api = overpy.Overpass(url=OVERPASS_URL)
     bounds = "%s,%s,%s,%s" % (minlat-tolerance, minlon-tolerance, maxlat+tolerance, maxlon+tolerance)
-    #result = api.query("(nwr[place][name='%s'](%s);nwr[place]['name:de'='%s'](%s);nwr[place]['short_name'='%s'](%s);nwr[place][alt_name='%s'](%s);nwr[place][official_name='%s'](%s););out;" % (name, bounds, name, bounds, name, bounds, name, bounds, name, bounds))
     query = """nwr[place](%s);out;""" % bounds
     result = api.query(query)
     places = []
