@@ -202,3 +202,15 @@ def execute(sql, db_con=None):
 
 def print_district_partitions(gemeindename):
     execute("SELECT GEMEINDE.GKZ, OKZ, ORTSNAME FROM GEMEINDE JOIN ORTSCHAFT ON GEMEINDE.GKZ = ORTSCHAFT.GKZ WHERE GEMEINDENAME='%s'" % gemeindename)
+
+
+if __name__ == "__main__":
+    #search_osm_objects(get_db_conn())
+    #generate_missing_place_html(get_db_conn())
+    #generate_missing_street_html(get_db_conn())
+    #download_data("01102018")
+    #get_db_conn()
+    generate_missing_street_umap(get_db_conn())
+
+
+
