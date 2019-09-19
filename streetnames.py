@@ -13,6 +13,7 @@ ABBREVIATIONS = {
     "Sankt": "St.",
     "von": "v.",
     "van": "v.",
+    "Abt": "A.",
     "Architekt": "Arch.",
     "Bürgermeister": "Bgm.",
     "Nationalrat": "NR.",
@@ -29,7 +30,7 @@ ABBREVIATIONS = {
     "Billroth": "Theodor Billroth"
 }
 
-NAMES = ('Adam', 'Adolf', 'Alexander', 'Alfons', 'Alfred', 'Alois', 'Alphons', 'Amadeus', 'Ambros', 'Ant.', 'Anton', 'Arthur', 'Aug.', 'August',
+NAMES = ('Ad.', 'Adam', 'Adalbert', 'Adolf', 'Alexander', 'Alfons', 'Alfred', 'Alois', 'Alphons', 'Amadeus', 'Amand', 'Ambros', 'Ant.', 'Anselm', 'Anton', 'Arthur', 'Aug.', 'August',
     'Balthasar', 'Bernhard', 'Bertha',
     'Christoph', 'Clemens', 'Conrad',
     'Engelbert',
@@ -37,7 +38,7 @@ NAMES = ('Adam', 'Adolf', 'Alexander', 'Alfons', 'Alfred', 'Alois', 'Alphons', '
     'Georg', 'Gottfr.', 'Gottfried', 'Gottlieb', 'Gustav',
     'Hans', 'Heinr.', 'Heinrich', 'Herbert', 'Hertha', 'Herta', 'Hugo', 
     'Isolde',
-    'Jakob', 'Joh.', 'Johann', 'Josef', 'Joseph', 
+    'Jakob', 'Joh.', 'Johann', 'Josef', 'Joseph', 'Julius',
     'Karl', 
     'Leop.', 'Leopold', 'Ludwig',
     'Maria', 'Mathias', 'Max', 'Michael', 'Moritz', 'Mich.', 'Michel',
