@@ -63,9 +63,17 @@ def _get_existing_addresses(query):
 
     return addresses
 
-def get_existing_addresses_around(lat, lon, distance=3.0):
+#def get_existing_addresses_around(lat, lon, distance=3.0):
+def get_existing_addresses_around(lat, lon, distance=6.0):
     query = 'nwr["addr:housenumber"](around: %s,%s,%s);out center;' % (distance, lat, lon)
+    #print(query)
     return _get_existing_addresses(query)
+
+def is_building_nearby(lat, lon, distance=3.0):
+    query = 'nwr[building](around: %s,%s,%s);out center;' % (distance, lat, lon)
+    api = overpy.Overpass(url=OVERPASS_URL)
+    result = api.query(query)
+    return (len(result.ways) + len(result.relations) > 0)
 
 def get_existing_addresses(minlat, minlon, maxlat, maxlon):
     query = 'nwr["addr:housenumber"](%s,%s,%s,%s);out center;' % (minlat, minlon, maxlat, maxlon)
@@ -118,32 +126,84 @@ def get_housenumbers_without_streetname(minlat, minlon, maxlat, maxlon):
     housenumbers.extend(result.relations)
     return housenumbers
 
-def place_exists(minlat, minlon, maxlat, maxlon, name):
+def admin_boundary_exists(minlat, minlon, maxlat, maxlon, name):
     api = overpy.Overpass(url=OVERPASS_URL)
     bounds = "%s,%s,%s,%s" % (minlat, minlon, maxlat, maxlon)
-    result = api.query("(nwr[place][name='%s'](%s);nwr[place]['name:de'='%s'](%s);nwr[place]['short_name'='%s'](%s);nwr[place][alt_name='%s'](%s);nwr[place][official_name='%s'](%s););out;" % (name, bounds, name, bounds, name, bounds, name, bounds, name, bounds))
-    return (len(result.nodes) + len(result.ways) + len(result.relations) > 0)
+    #result = api.query("(nwr[place][name='%s'](%s);nwr[place]['name:de'='%s'](%s);nwr[place]['short_name'='%s'](%s);nwr[place][alt_name='%s'](%s);nwr[place][official_name='%s'](%s););out;" % (name, bounds, name, bounds, name, bounds, name, bounds, name, bounds))
+    query = """relation[boundary=administrative](%s);out;""" % bounds
+    result = api.query(query)
+    for boundary in result.relations:
+        for tag in ("name", "name:de", "alt_name", "official_name", "short_name"):
+            try:
+                if tag in boundary.tags:
+                    if boundary.tags[tag].startswith("Gemeinde "):
+                        boundary_name = boundary.tags[tag][9:]
+                    else:
+                        boundary_name = boundary.tags[tag]
+                    if boundary_name == name:
+                        return True
+            except ValueError:
+                # ignore places with unsupported characters
+                pass
+    return False
+    
 
-def get_streets_by_name(minlat, minlon, maxlat, maxlon, name):
+def place_exists(minlat, minlon, maxlat, maxlon, name, tolerance=0, ignore_postfix=False):
+    api = overpy.Overpass(url=OVERPASS_URL)
+    bounds = "%s,%s,%s,%s" % (minlat-tolerance, minlon-tolerance, maxlat+tolerance, maxlon+tolerance)
+    #result = api.query("(nwr[place][name='%s'](%s);nwr[place]['name:de'='%s'](%s);nwr[place]['short_name'='%s'](%s);nwr[place][alt_name='%s'](%s);nwr[place][official_name='%s'](%s););out;" % (name, bounds, name, bounds, name, bounds, name, bounds, name, bounds))
+    query = """nwr[place](%s);out;""" % bounds
+    result = api.query(query)
+    places = []
+    places.extend(result.nodes)
+    places.extend(result.ways)
+    places.extend(result.relations)
+    for place in places:
+        for tag in ("name", "name:de", "alt_name", "official_name", "short_name", "full_name"):
+            try:
+                if tag in place.tags:
+                    search_name = name
+                    found_name = place.tags[tag]
+                    if ignore_postfix:
+                        for postfix in ["im", "in", "am", "bei", "an der"]:
+                            if " %s " % postfix in search_name:
+                                search_name = search_name[:search_name.index(postfix)-1]
+                            if " %s " % postfix in found_name:
+                                found_name = found_name[:found_name.index(postfix)-1]
+                    if normalize_streetname(search_name) == normalize_streetname(found_name):
+                        return True
+            except ValueError:
+                # ignore places with unsupported characters
+                pass
+    return False
+
+def streets_exist(minlat, minlon, maxlat, maxlon):
     api = overpy.Overpass(url=OVERPASS_URL)
     bounds = "%s,%s,%s,%s" % (minlat, minlon, maxlat, maxlon)
+    result = api.query("way[highway](%s);out;" % bounds)
+    return (len(result.ways) > 0)
+
+def get_streets_by_name(minlat, minlon, maxlat, maxlon, name, tolerance=0):
+    api = overpy.Overpass(url=OVERPASS_URL)
+    bounds = "%s,%s,%s,%s" % (minlat-tolerance, minlon-tolerance, maxlat+tolerance, maxlon+tolerance)
     query = """way[highway](%s);(._;>;);out;""" % bounds
-    #print(query)
     result = api.query(query)
     ways = []
     nodes = {}
     for way in result.ways:
-        try:
-            if "name" in way.tags and normalize_streetname(way.tags["name"]) == normalize_streetname(name):
-                ways.append(way)
-            elif "alt_name" in way.tags and normalize_streetname(way.tags["alt_name"]) == normalize_streetname(name):
-                ways.append(way)
-            elif "official_name" in way.tags and normalize_streetname(way.tags["official_name"]) == normalize_streetname(name):
-                ways.append(way)
-            elif "short_name" in way.tags and normalize_streetname(way.tags["short_name"]) == normalize_streetname(name):
-                ways.append(way)
-        except ValueError:
-            pass
+        for tag in ("name", "name:de", "alt_name", "official_name", "short_name", "name:left", "name:right"):
+            try:
+                if tag in way.tags and normalize_streetname(way.tags[tag]) == normalize_streetname(name):
+                    ways.append(way)
+            except ValueError:
+                # ignore ways with unsupported characters
+                pass
     for node in result.nodes:
         nodes[node.id] = node
     return (ways, nodes)
+
+if __name__ == '__main__':
+    api = overpy.Overpass(url=OVERPASS_URL)
+    query = """[timeout:600];nwr["addr:housenumber"](area:3600052345);out;"""
+    result = api.query(query)
+    print(len(result.nodes) + len(result.ways) + len(result.relations))
