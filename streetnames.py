@@ -16,10 +16,12 @@ ABBREVIATIONS = {
     "Abt": "A.",
     "Architekt": "Arch.",
     "Bürgermeister": "Bgm.",
+    "Bgmst.": "Bgm.",
     "Nationalrat": "NR.",
     "Dechant": "D.",
     "Ingenieur": "Ing.",
     "Schwester": "Sr.",
+    "Zur": "Z.",
     "Weissenbach bei Mödling": "Weissenbach",
     "Kais.Elisabeth": "Kaiserin Elisabeth",
     "Beethoven": "Ludwig van Beethoven",
@@ -33,10 +35,10 @@ ABBREVIATIONS = {
 NAMES = ('Ad.', 'Adam', 'Adalbert', 'Adolf', 'Alexander', 'Alfons', 'Alfred', 'Alois', 'Alphons', 'Amadeus', 'Amand', 'Ambros', 'Ant.', 'Anselm', 'Anton', 'Arthur', 'Aug.', 'August',
     'Balthasar', 'Bernhard', 'Bertha',
     'Christoph', 'Clemens', 'Conrad',
-    'Engelbert',
+    'Egon', 'Engelbert',
     'Felix', 'Ferd.', 'Ferdinand', 'Franz', 'Fr.', 'Friedr.', 'Friedrich',
     'Georg', 'Gottfr.', 'Gottfried', 'Gottlieb', 'Gustav',
-    'Hans', 'Heinr.', 'Heinrich', 'Herbert', 'Hertha', 'Herta', 'Hugo', 
+    'Hans', 'Heinr.', 'Heinrich', 'Herbert', 'Hertha', 'Herta', 'Hironimus', 'Hugo', 
     'Isolde',
     'Jakob', 'Joh.', 'Johann', 'Josef', 'Joseph', 'Julius',
     'Karl', 
@@ -53,7 +55,7 @@ NAMES = ('Ad.', 'Adam', 'Adalbert', 'Adolf', 'Alexander', 'Alfons', 'Alfred', 'A
     'Zach.', 'Zacharias')
 
 ''' strips whitespace/dash, ß->ss, ignore case '''
-def normalize_streetname(street, expand_abbreviations=True):
+def normalize_streetname(street, expand_abbreviations=True, ignore_street_postfix=False):
     valid_chars = string.ascii_letters + string.digits + "üäö.,()/;+ -'"
     translation_table = str.maketrans("áčéěëèíóőřšúž", "aceeeeioorsuz")
     s = street.replace("ß", "ss").lower()
@@ -86,4 +88,11 @@ def normalize_streetname(street, expand_abbreviations=True):
     if not all([char in valid_chars for char in s]):
         raise ValueError("non ascii character found in street name: ", s)
     s = s.replace(" ", "").replace("-", "").replace("'", "").lower()
+    if ignore_street_postfix:
+        if s.endswith("strasse"):
+            s = s[:-7]
+        elif s.endswith("gasse"):
+            s = s[:-5]
+        elif s.endswith("weg"):
+            s = s[:-3]
     return s

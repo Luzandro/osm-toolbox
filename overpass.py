@@ -179,7 +179,7 @@ def streets_exist(minlat, minlon, maxlat, maxlon):
     result = api.query("way[highway](%s);out;" % bounds)
     return (len(result.ways) > 0)
 
-def get_streets_by_name(minlat, minlon, maxlat, maxlon, name, tolerance=0):
+def get_streets_by_name(minlat, minlon, maxlat, maxlon, name, tolerance=0, ignore_street_postfix=False):
     api = overpy.Overpass(url=OVERPASS_URL)
     bounds = "%s,%s,%s,%s" % (minlat-tolerance, minlon-tolerance, maxlat+tolerance, maxlon+tolerance)
     query = """way[highway](%s);(._;>;);out;""" % bounds
@@ -189,7 +189,7 @@ def get_streets_by_name(minlat, minlon, maxlat, maxlon, name, tolerance=0):
     for way in result.ways:
         for tag in ("name", "name:de", "alt_name", "official_name", "short_name", "name:left", "name:right"):
             try:
-                if tag in way.tags and normalize_streetname(way.tags[tag]) == normalize_streetname(name):
+                if tag in way.tags and normalize_streetname(way.tags[tag], ignore_street_postfix=ignore_street_postfix) == normalize_streetname(name, ignore_street_postfix=ignore_street_postfix):
                     ways.append(way)
             except ValueError:
                 # ignore ways with unsupported characters
