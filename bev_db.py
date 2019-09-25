@@ -82,13 +82,16 @@ def download_data(key_date=None):
         os.symlink('Adresse_Relationale_Tabellen-Stichtagsdaten_%s.zip' % key_date, 'Adresse_Relationale_Tabellen-Stichtagsdaten.zip')
     return key_date
 
-def search_osm_objects(db_con):
+def search_osm_objects(db_con, update_not_found_objects=False, gkz_like='%'):
     overpass.use_local_overpass(True)
     select_cursor = db_con.cursor()
     update_cursor = db_con.cursor()
-    for row in select_cursor.execute("""SELECT GEMEINDE.GKZ, GEMEINDENAME, MIN(LAT), MIN(LON), MAX(LAT), MAX(LON) 
-        FROM GEMEINDE JOIN ADRESSE ON ADRESSE.GKZ = GEMEINDE.GKZ WHERE GEMEINDE.FOUND IS NULL 
-        GROUP BY GEMEINDE.GKZ, GEMEINDENAME ORDER BY GEMEINDENAME"""):
+    gkz_like = (gkz_like,)
+
+    query = """SELECT GEMEINDE.GKZ, GEMEINDENAME, MIN(LAT), MIN(LON), MAX(LAT), MAX(LON) 
+        FROM GEMEINDE JOIN ADRESSE ON ADRESSE.GKZ = GEMEINDE.GKZ WHERE GEMEINDE.FOUND IS NULL %s AND GEMEINDE.GKZ LIKE ?
+        GROUP BY GEMEINDE.GKZ, GEMEINDENAME ORDER BY GEMEINDENAME""" % (" OR GEMEINDE.FOUND == 0 " if update_not_found_objects else "")
+    for row in select_cursor.execute(query, gkz_like):
 
         gkz, gemeindename, min_lat, min_lon, max_lat, max_lon = row
         found = overpass.admin_boundary_exists(min_lat, min_lon, max_lat, max_lon, gemeindename)
@@ -96,12 +99,13 @@ def search_osm_objects(db_con):
         update_cursor.execute("UPDATE GEMEINDE SET FOUND = ? WHERE GEMEINDE.GKZ=?;", (found, gkz))
         db_con.commit()
     
-    count = select_cursor.execute("SELECT COUNT(*) FROM ORTSCHAFT WHERE ORTSCHAFT.FOUND IS NULL AND ORTSCHAFT.GKZ LIKE '317%'").fetchone()[0]
+    count = select_cursor.execute("""SELECT COUNT(*) FROM ORTSCHAFT 
+        WHERE ORTSCHAFT.FOUND IS NULL %s AND ORTSCHAFT.GKZ LIKE ?""" % (" OR ORTSCHAFT.FOUND == 0 " if update_not_found_objects else ""), gkz_like).fetchone()[0]
     i = 0
     with ProgressBar("suche Ortschaften...") as pb:
         for row in select_cursor.execute("""SELECT ORTSCHAFT.OKZ, ORTSNAME, MIN(LAT), MIN(LON), MAX(LAT), MAX(LON) 
-            FROM ORTSCHAFT JOIN ADRESSE ON ADRESSE.OKZ = ORTSCHAFT.OKZ WHERE ORTSCHAFT.FOUND IS NULL OR ORTSCHAFT.FOUND == 0 AND ORTSCHAFT.GKZ LIKE '317%'
-            GROUP BY ORTSCHAFT.OKZ, ORTSNAME ORDER BY ORTSNAME"""):
+            FROM ORTSCHAFT JOIN ADRESSE ON ADRESSE.OKZ = ORTSCHAFT.OKZ WHERE ORTSCHAFT.FOUND IS NULL %s AND ORTSCHAFT.GKZ LIKE ?
+            GROUP BY ORTSCHAFT.OKZ, ORTSNAME ORDER BY ORTSNAME""" % (" OR ORTSCHAFT.FOUND == 0 " if update_not_found_objects else ""), gkz_like):
 
             i += 1
             current_percentage = float(i) / count * 100
@@ -119,16 +123,18 @@ def search_osm_objects(db_con):
             update_cursor.execute("UPDATE ORTSCHAFT SET FOUND = ? WHERE ORTSCHAFT.OKZ=?;", (found, okz))
         db_con.commit()
 
-    count = select_cursor.execute("SELECT COUNT(*) FROM STRASSE WHERE STRASSE.FOUND IS NULL OR STRASSE.FOUND == 0 AND STRASSE.GKZ LIKE '317%'").fetchone()[0]
+    count = select_cursor.execute("""SELECT COUNT(*) FROM STRASSE 
+        WHERE STRASSE.FOUND IS NULL %s AND STRASSE.GKZ LIKE ?""" % (" OR STRASSE.FOUND == 0 " if update_not_found_objects else ""), gkz_like).fetchone()[0]
     i = 0
     with ProgressBar("suche Straßen...") as pb:
         try:
             for row in select_cursor.execute("""SELECT STRASSE.SKZ, STRASSE.STRASSENNAME, COUNT(ADRESSE.ADRCD), MIN(LAT), MIN(LON), MAX(LAT), MAX(LON) 
                 FROM STRASSE JOIN ADRESSE ON ADRESSE.SKZ = STRASSE.SKZ 
                 JOIN ORTSCHAFT ON ORTSCHAFT.OKZ = ADRESSE.OKZ
-                WHERE STRASSE.FOUND IS NULL OR STRASSE.FOUND == 0 AND STRASSE.GKZ LIKE '317%'
+                WHERE STRASSE.FOUND IS NULL %s AND STRASSE.GKZ LIKE ?
                 AND STRASSE.STRASSENNAME != ORTSCHAFT.ORTSNAME
-                GROUP BY STRASSE.SKZ, STRASSE.STRASSENNAME ORDER BY COUNT(ADRESSE.ADRCD) DESC"""):
+                GROUP BY STRASSE.SKZ, STRASSE.STRASSENNAME 
+                ORDER BY COUNT(ADRESSE.ADRCD) DESC""" % (" OR STRASSE.FOUND == 0 " if update_not_found_objects else ""), gkz_like):
 
                 i += 1
                 current_percentage = float(i) / count * 100
@@ -205,12 +211,7 @@ def print_district_partitions(gemeindename):
 
 
 if __name__ == "__main__":
-    #search_osm_objects(get_db_conn())
-    #generate_missing_place_html(get_db_conn())
-    #generate_missing_street_html(get_db_conn())
-    #download_data("01102018")
-    #get_db_conn()
-    generate_missing_street_umap(get_db_conn())
+    search_osm_objects(get_db_conn(), update_not_found_objects=True)
 
 
 
