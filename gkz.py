@@ -56,6 +56,7 @@ BEZIRK = {
     "321": "Tulln",
     "322": "Waidhofen_Thaya",
     "323": "Wr.Neustadt-Land",
+    "324": "Wien-Umgebung",
     "325": "Zwettl",
     "401": "Linz-Stadt",
     "402": "Steyr-Stadt",
