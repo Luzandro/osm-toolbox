@@ -40,6 +40,11 @@ def reproject(sourceCRS, point):
 def get_distance(point1, point2):
     return haversine.get_distance(point1, point2)
 
+def get_area_size(min_lon, max_lon, min_lat, max_lat):
+    a = get_distance((min_lon, min_lat), (min_lon, max_lat))
+    b = get_distance((min_lon, min_lat), (max_lon, min_lat))
+    return a * b / 1000000
+
 def _get_distance_osgeo_reprojection(point1, point2):
     # Note: 
     # results from this function differ quite significantly (nearly a factor 2)
