@@ -10,6 +10,8 @@ import sys
 import zipfile
 from progressbar import ProgressBar
 
+SNAPSHOTS = ["15072015", "08102015", "01042016", "02102016", "07042017", "01102017", "02042018", "01102018", "01042019"]
+
 def import_db(key_date):
     csv_files = ["STRASSE.csv", "GEMEINDE.csv", "ADRESSE.csv", "GEBAEUDE.csv", "ORTSCHAFT.csv"]
     if key_date:
@@ -19,10 +21,10 @@ def import_db(key_date):
     if not os.path.exists(directory):
         if not os.path.exists("%s.zip" % directory):
             key_date = download_data(key_date)
-        with zipfile.ZipFile('Adresse_Relationale_Tabellen-Stichtagsdaten.zip', 'r') as myzip:
+        with zipfile.ZipFile('%s.zip' % directory, 'r') as myzip:
             for csv_file in csv_files:
                 print("extracting %s" % csv_file)
-                myzip.extract(csv_file, "Adresse_Relationale_Tabellen-Stichtagsdaten")
+                myzip.extract(csv_file, directory)
     print("populating database")
     con = sqlite3.connect("%s.sqlite" % directory)
     cur = con.cursor()
@@ -47,6 +49,8 @@ def import_db(key_date):
                 current_percentage = float(i) / num_rows * 100
                 pb.update(current_percentage)
                 if table in ("ADRESSE", "GEBAEUDE"):
+                    if row["RW"] == "" or row["HW"] == "":
+                        continue # ignore entries without location data
                     (row["LON"], row["LAT"]) = projection.reproject(row["EPSG"], (row["RW"], row["HW"]))
                 cur.execute("INSERT INTO %s VALUES (%s);" % (table, placeholder), list(row.values()))
     print("adding flag for ambiguous streetnames")
