@@ -107,6 +107,8 @@ venv.bak/
 *.sqlite
 *.csv
 *.zip
+*.umap
+*.geojson
 Adresse_relationale_Tabellen-Stichtagsdaten*/
 results/
 convert-addresses.py
