@@ -135,7 +135,7 @@ def search_osm_objects(db_con, update_not_found_objects=False, gkz_like='%'):
             for row in select_cursor.execute("""SELECT STRASSE.SKZ, STRASSE.STRASSENNAME, COUNT(ADRESSE.ADRCD), MIN(LAT), MIN(LON), MAX(LAT), MAX(LON) 
                 FROM STRASSE JOIN ADRESSE ON ADRESSE.SKZ = STRASSE.SKZ 
                 JOIN ORTSCHAFT ON ORTSCHAFT.OKZ = ADRESSE.OKZ
-                WHERE STRASSE.FOUND IS NULL %s AND STRASSE.GKZ LIKE ?
+                WHERE STRASSE.FOUND IS NULL %s AND STRASSE.GKZ LIKE ? 
                 AND STRASSE.STRASSENNAME != ORTSCHAFT.ORTSNAME
                 GROUP BY STRASSE.SKZ, STRASSE.STRASSENNAME 
                 ORDER BY COUNT(ADRESSE.ADRCD) DESC""" % (" OR STRASSE.FOUND == 0 " if update_not_found_objects else ""), gkz_like):
@@ -213,9 +213,11 @@ def execute(sql, db_con=None):
 def print_district_partitions(gemeindename):
     execute("SELECT GEMEINDE.GKZ, OKZ, ORTSNAME FROM GEMEINDE JOIN ORTSCHAFT ON GEMEINDE.GKZ = ORTSCHAFT.GKZ WHERE GEMEINDENAME='%s'" % gemeindename)
 
+def format_key_date(key_date):
+    return "%s-%s" % (key_date[-4:], key_date[2:4])
 
 if __name__ == "__main__":
-    search_osm_objects(get_db_conn(), update_not_found_objects=True)
+    search_osm_objects(get_db_conn(), update_not_found_objects=True, gkz_like="317%")
 
 
 

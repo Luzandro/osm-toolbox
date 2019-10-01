@@ -61,16 +61,30 @@ class Umap():
         with open(filename, 'w') as f:
             dump(self.get_dict(), f, indent=2)
 
-def generate_new_street_umap(number_of_snapshots=2, include_found_objects=False):
+    def get_josm_link(self, min_lon, max_lon, min_lat, max_lat, area_size=None):
+        if area_size is None:
+            area_size = projection.get_area_size(min_lon, max_lon, min_lat, max_lat)
+        if area_size < 40:
+            josm_link = "[[http://localhost:8111/load_and_zoom?left=%s&bottom=%s&right=%s&top=%s|Adress-Bereich in JOSM laden]]" % (min_lon, min_lat, max_lon, max_lat)
+        else:
+            josm_link = "[[http://localhost:8111/zoom?left=%s&bottom=%s&right=%s&top=%s|zoom JOSM auf Adress-Bereich]]" % (min_lon, min_lat, max_lon, max_lat)
+        return josm_link
+
+def generate_new_street_umap(number_of_snapshots=2, include_found_objects=False, gkz_starts_with = ""):
     ids = {}
     skz_found = {}
+    gkz_starts_with += "%"
     con = bev_db.get_db_conn() # always use newest db to check found status
     for skz, found in con.execute("SELECT SKZ, FOUND FROM STRASSE"):
         if found is None or found == 0:
             skz_found[skz] = False
         else:
             skz_found[skz] = True
+    umap = Umap()
+    number_of_streets = 0
+    number_of_missing_streets = 0
     for (old, new) in zip(bev_db.SNAPSHOTS[-number_of_snapshots:], bev_db.SNAPSHOTS[-number_of_snapshots+1:]):
+        print(old, new)
         if not old in ids:
             con = bev_db.get_db_conn(old)
             ids[old] = set()
@@ -85,35 +99,40 @@ def generate_new_street_umap(number_of_snapshots=2, include_found_objects=False)
         cur = con.cursor()
         query = """SELECT GEMEINDE.GKZ, GEMEINDE.GEMEINDENAME, STRASSE.SKZ, STRASSE.STRASSENNAME, 
             COUNT(ADRESSE.ADRCD), MIN(LAT), MIN(LON), MAX(LAT), MAX(LON) 
-            FROM STRASSE JOIN ADRESSE ON ADRESSE.SKZ = STRASSE.SKZ JOIN GEMEINDE ON GEMEINDE.GKZ = ADRESSE.GKZ WHERE STRASSE.SKZ IN ({}) 
+            FROM STRASSE JOIN ADRESSE ON ADRESSE.SKZ = STRASSE.SKZ JOIN GEMEINDE ON GEMEINDE.GKZ = ADRESSE.GKZ 
+            WHERE STRASSE.GKZ LIKE ? AND STRASSE.SKZ IN ({})
             GROUP BY STRASSE.SKZ HAVING COUNT(ADRESSE.ADRCD) > 1 ORDER BY 1, 4 DESC""".format(",".join("?"*len(new_ids)))
-        umap = Umap()
-        for row in cur.execute(query, tuple(new_ids)):
+        parameters = [gkz_starts_with] + list(new_ids)
+        for row in cur.execute(query, parameters):
             gkz, gemeindename, skz, strassenname, count, min_lat, min_lon, max_lat, max_lon = row
             bezirkname = get_bezirk(gkz)
             try:
-                a = projection.get_distance((min_lon, min_lat), (min_lon, max_lat))
-                b = projection.get_distance((min_lon, min_lat), (max_lon, min_lat))
+                area_size = projection.get_area_size(min_lon, max_lon, min_lat, max_lat)
             except TypeError:
                 continue
-            area_size = a * b / 1000000
             try:
                 adr_per_km2 = count / area_size
             except ZeroDivisionError:
-                adr_per_km2 = 0
-            #josm_link = "[[http://localhost:8111/zoom?left=%s&bottom=%s&right=%s&top=%s|zoom JOSM auf Adress-Bereich]]"
-            josm_link = "[[http://localhost:8111/load_and_zoom?left=%s&bottom=%s&right=%s&top=%s|Adress-Bereich in JOSM laden]]" % (min_lon, min_lat, max_lon, max_lat)
-            properties={"name": "%s (%s)" % (strassenname, gemeindename),
-                        "description": """%s\n%s Adressen\nSKZ %s\nGröße: %4.2f km²\nAdr./km²: %s""" % (josm_link, count, skz, area_size, int(adr_per_km2))
+                adr_per_km2 = 0            
+            josm_link = umap.get_josm_link(min_lon, max_lon, min_lat, max_lat, area_size=area_size)
+            properties={"name": "#%s %s (%s)" % (gkz[3:], strassenname, gemeindename),
+                        "description": "%s\nAb Stichtag %s\n%s Adressen\nSKZ %s\nGröße: %4.2f km²\nAdr./km²: %s" % (josm_link, bev_db.format_key_date(new), count, skz, area_size, int(adr_per_km2))
             }
             feature = Feature(properties=properties, 
                 geometry=Polygon([[[min_lon, min_lat], [min_lon, max_lat], [max_lon, max_lat], [max_lon, min_lat]]])
             )
             if skz not in skz_found or not skz_found[skz]:
+                number_of_missing_streets += 1
                 umap.add_feature(feature, bezirkname, {"color": "Red"})
             elif include_found_objects:
                 umap.add_feature(feature, bezirkname)
-        umap.dump('new_streets_%s.umap' % new)
+            number_of_streets += 1
+    if gkz_starts_with == "":
+        filename = "new_streets.umap"
+    else:
+        filename = "new_streets_%s.umap" % (gkz_starts_with)
+    umap.dump(filename)
+    print("%s/%s streets missing" % (number_of_missing_streets, number_of_streets))
 
 def generate_renamed_street_umap(number_of_snapshots=2, include_found_objects=False):
     streets = {}
@@ -140,20 +159,15 @@ def generate_renamed_street_umap(number_of_snapshots=2, include_found_objects=Fa
         gkz, gemeindename, skz, strassenname, found, count, min_lat, min_lon, max_lat, max_lon = row
         bezirkname = get_bezirk(gkz)
         try:
-            a = projection.get_distance((min_lon, min_lat), (min_lon, max_lat))
-            b = projection.get_distance((min_lon, min_lat), (max_lon, min_lat))
+            area_size = projection.get_area_size(min_lon, max_lon, min_lat, max_lat)
         except TypeError:
             continue
-        area_size = a * b / 1000000
         try:
             adr_per_km2 = count / area_size
         except ZeroDivisionError:
             adr_per_km2 = 0
-        changes = "\n".join(["%s: %s" % (s[1], s[0]) for s in streets[skz]])
-        if area_size < 40:
-            josm_link = "[[http://localhost:8111/load_and_zoom?left=%s&bottom=%s&right=%s&top=%s|Adress-Bereich in JOSM laden]]" % (min_lon, min_lat, max_lon, max_lat)
-        else:
-            josm_link = "[[http://localhost:8111/zoom?left=%s&bottom=%s&right=%s&top=%s|zoom JOSM auf Adress-Bereich]]" % (min_lon, min_lat, max_lon, max_lat)
+        changes = "\n".join(["%s: %s" % (bev_db.format_key_date(s[1]), s[0]) for s in streets[skz]])
+        josm_link = umap.get_josm_link(min_lon, max_lon, min_lat, max_lat, area_size=area_size)
         properties={"name": "%s (%s)" % (strassenname, gemeindename),
                     "description": """%s\n%s\n%s Adressen\nSKZ %s\nGröße: %4.2f km²\nAdr./km²: %s""" % (josm_link, changes, count, skz, area_size, int(adr_per_km2))
         }
@@ -166,7 +180,41 @@ def generate_renamed_street_umap(number_of_snapshots=2, include_found_objects=Fa
             umap.add_feature(feature, bezirkname)
     umap.dump('renamed_streets.umap')
 
+def generate_missing_street_umap(gkz_starts_with=""):
+    con = bev_db.get_db_conn()
+    gkz_starts_with += "%"
+    query = """SELECT GEMEINDE.GKZ, GEMEINDE.GEMEINDENAME, STRASSE.SKZ, STRASSENNAME, COUNT(ADRESSE.ADRCD), MIN(LAT), MIN(LON), MAX(LAT), MAX(LON) 
+        FROM STRASSE JOIN ADRESSE ON ADRESSE.SKZ = STRASSE.SKZ JOIN GEMEINDE ON GEMEINDE.GKZ = ADRESSE.GKZ WHERE STRASSE.FOUND == 0 AND STRASSE.GKZ LIKE ?
+        GROUP BY STRASSE.SKZ, STRASSENNAME HAVING COUNT(ADRESSE.ADRCD) > 1 ORDER BY 1, 4 DESC"""
+    umap = Umap()
+    for row in con.execute(query, (gkz_starts_with,)):
+        gkz, gemeindename, skz, strassenname, count, min_lat, min_lon, max_lat, max_lon = row
+        bezirkname = get_bezirk(gkz)
+        try:
+            area_size = projection.get_area_size(min_lon, max_lon, min_lat, max_lat)
+        except TypeError:
+            continue
+        try:
+            adr_per_km2 = count / area_size
+        except ZeroDivisionError:
+            adr_per_km2 = 0
+        if adr_per_km2 > 100:
+            josm_link = umap.get_josm_link(min_lon, max_lon, min_lat, max_lat, area_size=area_size)
+            properties={"name": "%s (%s)" % (strassenname, gemeindename),
+                        "description": """%s\n%s Adressen\nSKZ %s\nGröße: %4.2f km²\nAdr./km²: %s""" % (josm_link, count, skz, area_size, int(adr_per_km2))
+            }
+            feature = Feature(properties=properties, 
+                geometry=Polygon([[[min_lon, min_lat], [min_lon, max_lat], [max_lon, max_lat], [max_lon, min_lat]]])
+            )
+            umap.add_feature(feature, bezirkname)
+    if gkz_starts_with == "":
+        filename = "missing_streets.umap"
+    else:
+        filename = "missing_streets_%.umap" % gkz_starts_with
+    umap.dump(filename)
+
+
+
 if __name__ == "__main__":
-    #generate_new_street_umap()
-    generate_renamed_street_umap(9)
+    generate_new_street_umap(len(bev_db.SNAPSHOTS), gkz_starts_with="9")
     
