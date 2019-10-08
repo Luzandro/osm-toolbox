@@ -56,8 +56,8 @@ NAMES = ('Ad.', 'Adam', 'Adalbert', 'Adolf', 'Alexander', 'Alfons', 'Alfred', 'A
 
 ''' strips whitespace/dash, ß->ss, ignore case '''
 def normalize_streetname(street, expand_abbreviations=True, ignore_street_postfix=False):
-    valid_chars = string.ascii_letters + string.digits + "üäö.,()/;+ -'"
-    translation_table = str.maketrans("áčéěëèíóőřšúž", "aceeeeioorsuz")
+    valid_chars = string.ascii_letters + string.digits + "üäö.,()/;+ -'\"*`"
+    translation_table = str.maketrans("áčéěëèíóőřšúž*`", "aceeeeioorsuz  ")
     s = street.replace("ß", "ss").lower()
     s = s.replace("\xa0", "") # non breaking space
     s = s.replace("&", "+")
@@ -87,7 +87,7 @@ def normalize_streetname(street, expand_abbreviations=True, ignore_street_postfi
             s = s.replace(key, value)
     if not all([char in valid_chars for char in s]):
         raise ValueError("non ascii character found in street name: ", s)
-    s = s.replace(" ", "").replace("-", "").replace("'", "").lower()
+    s = s.replace(" ", "").replace("-", "").replace("'", "").replace('"', "").lower()
     if ignore_street_postfix:
         if s.endswith("strasse"):
             s = s[:-7]
