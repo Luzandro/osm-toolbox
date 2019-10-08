@@ -12,6 +12,11 @@ from progressbar import ProgressBar
 
 SNAPSHOTS = ["15072015", "08102015", "01042016", "02102016", "07042017", "01102017", "02042018", "01102018", "01042019"]
 
+class SearchStatus:
+    NOT_FOUND = 0
+    FOUND = 1
+    UNDER_CONSTRUCTION = 2
+
 def import_db(key_date):
     csv_files = ["STRASSE.csv", "GEMEINDE.csv", "ADRESSE.csv", "GEBAEUDE.csv", "ORTSCHAFT.csv"]
     if key_date:
@@ -104,7 +109,7 @@ def search_osm_objects(db_con, update_not_found_objects=False, gkz_like='%'):
         db_con.commit()
     
     count = select_cursor.execute("""SELECT COUNT(*) FROM ORTSCHAFT 
-        WHERE ORTSCHAFT.FOUND IS NULL %s AND ORTSCHAFT.GKZ LIKE ?""" % (" OR ORTSCHAFT.FOUND == 0 " if update_not_found_objects else ""), gkz_like).fetchone()[0]
+        WHERE (ORTSCHAFT.FOUND IS NULL %s) AND ORTSCHAFT.GKZ LIKE ?""" % (" OR ORTSCHAFT.FOUND == 0 " if update_not_found_objects else ""), gkz_like).fetchone()[0]
     i = 0
     with ProgressBar("suche Ortschaften...") as pb:
         for row in select_cursor.execute("""SELECT ORTSCHAFT.OKZ, ORTSNAME, MIN(LAT), MIN(LON), MAX(LAT), MAX(LON) 
@@ -127,8 +132,9 @@ def search_osm_objects(db_con, update_not_found_objects=False, gkz_like='%'):
             update_cursor.execute("UPDATE ORTSCHAFT SET FOUND = ? WHERE ORTSCHAFT.OKZ=?;", (found, okz))
         db_con.commit()
 
-    count = select_cursor.execute("""SELECT COUNT(*) FROM STRASSE 
-        WHERE STRASSE.FOUND IS NULL %s AND STRASSE.GKZ LIKE ?""" % (" OR STRASSE.FOUND == 0 " if update_not_found_objects else ""), gkz_like).fetchone()[0]
+    query = """SELECT COUNT(*) FROM STRASSE 
+        WHERE (STRASSE.FOUND IS NULL %s) AND STRASSE.GKZ LIKE ?""" % (" OR STRASSE.FOUND == 0 " if update_not_found_objects else "")
+    count = select_cursor.execute(query, gkz_like).fetchone()[0]
     i = 0
     with ProgressBar("suche Straßen...") as pb:
         try:
@@ -147,9 +153,17 @@ def search_osm_objects(db_con, update_not_found_objects=False, gkz_like='%'):
                 skz, strassenname, adr_count, min_lat, min_lon, max_lat, max_lon = row
                 streets = overpass.get_streets_by_name(min_lat, min_lon, max_lat, max_lon, strassenname, tolerance=0.01)
                 if len(streets[0]) == 0:
-                    found = overpass.place_exists(min_lat, min_lon, max_lat, max_lon, strassenname, tolerance=0.01)
+                    if overpass.place_exists(min_lat, min_lon, max_lat, max_lon, strassenname, tolerance=0.01):
+                        found = SearchStatus.FOUND
+                    else:
+                        found = SearchStatus.NOT_FOUND
                 else:
-                    found = True
+                    for way in streets[0]:
+                        if way.tags["highway"] == "construction":
+                            found = SearchStatus.UNDER_CONSTRUCTION
+                            break
+                    else:
+                        found = SearchStatus.FOUND
                 #print(skz, strassenname, found)
                 update_cursor.execute("UPDATE STRASSE SET FOUND = ? WHERE STRASSE.SKZ=?;", (found, skz))
         except KeyboardInterrupt:
@@ -217,7 +231,7 @@ def format_key_date(key_date):
     return "%s-%s" % (key_date[-4:], key_date[2:4])
 
 if __name__ == "__main__":
-    search_osm_objects(get_db_conn(), update_not_found_objects=True, gkz_like="317%")
+    search_osm_objects(get_db_conn(), update_not_found_objects=True, gkz_like="30732")
 
 
 
