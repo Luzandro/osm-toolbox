@@ -10,7 +10,7 @@ import sys
 import zipfile
 from progressbar import ProgressBar
 
-SNAPSHOTS = ["15072015", "08102015", "01042016", "02102016", "07042017", "01102017", "02042018", "01102018", "01042019"]
+SNAPSHOTS = ["15072015", "08102015", "01042016", "02102016", "07042017", "01102017", "02042018", "01102018", "01042019", "01102019"]
 
 class SearchStatus:
     NOT_FOUND = 0
@@ -104,7 +104,6 @@ def search_osm_objects(db_con, update_not_found_objects=False, gkz_like='%'):
 
         gkz, gemeindename, min_lat, min_lon, max_lat, max_lon = row
         found = overpass.admin_boundary_exists(min_lat, min_lon, max_lat, max_lon, gemeindename)
-        print(gemeindename, found)
         update_cursor.execute("UPDATE GEMEINDE SET FOUND = ? WHERE GEMEINDE.GKZ=?;", (found, gkz))
         db_con.commit()
     
@@ -141,7 +140,7 @@ def search_osm_objects(db_con, update_not_found_objects=False, gkz_like='%'):
             for row in select_cursor.execute("""SELECT STRASSE.SKZ, STRASSE.STRASSENNAME, COUNT(ADRESSE.ADRCD), MIN(LAT), MIN(LON), MAX(LAT), MAX(LON) 
                 FROM STRASSE JOIN ADRESSE ON ADRESSE.SKZ = STRASSE.SKZ 
                 JOIN ORTSCHAFT ON ORTSCHAFT.OKZ = ADRESSE.OKZ
-                WHERE STRASSE.FOUND IS NULL %s AND STRASSE.GKZ LIKE ? 
+                WHERE (STRASSE.FOUND IS NULL %s) AND STRASSE.GKZ LIKE ? 
                 AND STRASSE.STRASSENNAME != ORTSCHAFT.ORTSNAME
                 GROUP BY STRASSE.SKZ, STRASSE.STRASSENNAME 
                 ORDER BY COUNT(ADRESSE.ADRCD) DESC""" % (" OR STRASSE.FOUND == 0 " if update_not_found_objects else ""), gkz_like):
@@ -151,20 +150,19 @@ def search_osm_objects(db_con, update_not_found_objects=False, gkz_like='%'):
                 pb.update(current_percentage)
 
                 skz, strassenname, adr_count, min_lat, min_lon, max_lat, max_lon = row
-                streets = overpass.get_streets_by_name(min_lat, min_lon, max_lat, max_lon, strassenname, tolerance=0.01)
-                if len(streets[0]) == 0:
+                streets = overpass.get_streets_by_name(min_lat, min_lon, max_lat, max_lon, strassenname, tolerance=0.01, include_nodes=False)
+                if len(streets) == 0:
                     if overpass.place_exists(min_lat, min_lon, max_lat, max_lon, strassenname, tolerance=0.01):
                         found = SearchStatus.FOUND
                     else:
                         found = SearchStatus.NOT_FOUND
                 else:
-                    for way in streets[0]:
+                    for way in streets:
                         if way.tags["highway"] == "construction":
                             found = SearchStatus.UNDER_CONSTRUCTION
                             break
                     else:
                         found = SearchStatus.FOUND
-                #print(skz, strassenname, found)
                 update_cursor.execute("UPDATE STRASSE SET FOUND = ? WHERE STRASSE.SKZ=?;", (found, skz))
         except KeyboardInterrupt:
             print("abort...")
@@ -231,7 +229,7 @@ def format_key_date(key_date):
     return "%s-%s" % (key_date[-4:], key_date[2:4])
 
 if __name__ == "__main__":
-    search_osm_objects(get_db_conn(), update_not_found_objects=True, gkz_like="30732")
+    search_osm_objects(get_db_conn(), update_not_found_objects=True)
 
 
 
