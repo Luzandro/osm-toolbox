@@ -179,24 +179,32 @@ def streets_exist(minlat, minlon, maxlat, maxlon):
     result = api.query("way[highway](%s);out;" % bounds)
     return (len(result.ways) > 0)
 
-def get_streets_by_name(minlat, minlon, maxlat, maxlon, name, tolerance=0, ignore_street_postfix=False):
+def get_streets_by_name(minlat, minlon, maxlat, maxlon, name, tolerance=0, ignore_street_postfix=False, include_nodes=True):
     api = overpy.Overpass(url=OVERPASS_URL)
     bounds = "%s,%s,%s,%s" % (minlat-tolerance, minlon-tolerance, maxlat+tolerance, maxlon+tolerance)
-    query = """way[highway](%s);(._;>;);out;""" % bounds
+    if include_nodes:
+        query = """way[highway](%s);(._;>;);out;""" % bounds
+    else:
+        query = """way[highway](%s);out;""" % bounds
+    print(query)
     result = api.query(query)
     ways = []
-    nodes = {}
+    normalized_streetname = normalize_streetname(name, ignore_street_postfix=ignore_street_postfix)
     for way in result.ways:
         for tag in ("name", "name:de", "alt_name", "official_name", "short_name", "name:left", "name:right"):
             try:
-                if tag in way.tags and normalize_streetname(way.tags[tag], ignore_street_postfix=ignore_street_postfix) == normalize_streetname(name, ignore_street_postfix=ignore_street_postfix):
+                if tag in way.tags and normalize_streetname(way.tags[tag], ignore_street_postfix=ignore_street_postfix) == normalized_streetname:
                     ways.append(way)
             except ValueError:
                 # ignore ways with unsupported characters
                 pass
-    for node in result.nodes:
-        nodes[node.id] = node
-    return (ways, nodes)
+    if include_nodes:
+        nodes = {}
+        for node in result.nodes:
+            nodes[node.id] = node
+        return (ways, nodes)
+    else:
+        return ways
 
 if __name__ == '__main__':
     api = overpy.Overpass(url=OVERPASS_URL)
